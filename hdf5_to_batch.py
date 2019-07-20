@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow.data as data
-from one_hot_encode_seq import to_index, one_hot
+from one_hot_encode_seq import do_all_the_shit
 tf.compat.v1.enable_eager_execution()
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
@@ -68,8 +68,7 @@ seq, mz, intensities = df.seq.values, df.mz.values, df.intensities.values
 
 ### BEGIN PREPROCESSING
 
-seq = list(map(to_index,seq))
-seq = np.array(list(map(one_hot,seq)))
+seq = np.array(list(map(do_all_the_shit,seq)))
 
 ### END PREPROCESSING
 
