@@ -1,7 +1,9 @@
 from pyteomics import mzid, mzml
 import pandas as pd
 import numpy as np
-import glob
+import glob,os
+
+os.chdir('./files')
 
 mzid_files=glob.glob('*.mzid')
 indexed_mzid = mzid.chain.from_iterable(mzid_files,use_index=True)

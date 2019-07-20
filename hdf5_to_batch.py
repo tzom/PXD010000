@@ -62,7 +62,7 @@ def preprocess_spectrum(dummy,mz,intensity):
     #### PREPROCESSING END #########
     return dummy,spectrum_dense
 
-df = pd.read_hdf('merged.hdf5','df')#,dtype= {'mz': str, 'intensities': str})
+df = pd.read_hdf('./files/merged.hdf5','df')#,dtype= {'mz': str, 'intensities': str})
 dataset_size = len(df)
 seq, mz, intensities = df.seq.values, df.mz.values, df.intensities.values
 
