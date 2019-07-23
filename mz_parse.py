@@ -10,7 +10,7 @@ MZ_MAX = 2000
 SPECTRUM_RESOLUTION = 2
 
 def preprocess_spectrum(dummy,mz,intensity):
-    global MZ_MAX, SPECTRUM_RESOLUTION
+    #global MZ_MAX, SPECTRUM_RESOLUTION
     #ID,mz,intensity = x
 
     def _parse_indices(element):
@@ -59,29 +59,39 @@ def preprocess_spectrum(dummy,mz,intensity):
     return dummy,spectrum_dense
 
 def tf_preprocess_spectrum(dummy,mz,intensity):
-    global MZ_MAX, SPECTRUM_RESOLUTION
-
-    # TODO replace any numpy with tensorflow inside here:
-    
+    #global MZ_MAX, SPECTRUM_RESOLUTION
+   
     n_spectrum = MZ_MAX * 10**SPECTRUM_RESOLUTION
     mz = mz*10**SPECTRUM_RESOLUTION
     
     # TODO: check this:
-    indices = tf.ceil(mz)
+    indices = tf.math.ceil(mz)
     indices = tf.cast(indices,tf.int64)
 
-    s = indices.shape 
-    
-    zeros = tf.zeros(shape=s,dtype=tf.int64)
 
     uniq_indices, i = tf.unique(indices)
     # TODO: check what exactly to use here, sum, max, mean, ...
-    uniq_values = tf.segment_sum(intensity,i)
-    zeros = tf.segment_sum(zeros,i)
+    uniq_values = tf.math.segment_sum(intensity,i)
 
+    # create as mask to truncate between 0<mz<max
+    # eliminate zeros:
+    notzero_mask = tf.math.greater(uniq_indices,tf.zeros_like(uniq_indices))    
+    # truncate :
+    trunc_mask = tf.math.less(uniq_indices,tf.zeros_like(uniq_indices)+n_spectrum)
+    # put into joint mask:
+    mask = tf.logical_and(notzero_mask,trunc_mask)
+    # apply mask:
+    uniq_indices = tf.boolean_mask(uniq_indices,mask)
+    uniq_values = tf.boolean_mask(uniq_values,mask)
+    
+
+    #### workaroud, cause tf.SparseTensor only works with tuple indices, so with stack zeros
+    zeros = tf.zeros_like(uniq_indices)
     uniq_indices_tuples = tf.stack([uniq_indices, zeros],axis = 1)
     sparse = tf.SparseTensor(indices = uniq_indices_tuples, values = uniq_values,dense_shape = [n_spectrum,1])
     dense = tf.sparse.to_dense(sparse)
+
+    #dense = tf.expand_dims(dense,axis=0)
     return dummy,dense
 
 def tf_maxpool(dense):
@@ -96,7 +106,7 @@ def tf_maxpool(dense):
     return x,i
 
 if __name__ == "__main__":
-    n_peaks = 40
+    n_peaks = 400
 
     mz = np.sort(np.random.uniform(100,1900,size=n_peaks))
     #intensity = np.random.standard_exponential(size=n_peaks)

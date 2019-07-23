@@ -7,60 +7,13 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 import pandas as pd
 import time
 
-from scipy.sparse import csr_matrix
+#from scipy.sparse import csr_matrix
 import numpy as np
+from mz_parse import tf_preprocess_spectrum
 
 MZ_MAX = 2000
-SPECTRUM_RESOLUTION = 0
+SPECTRUM_RESOLUTION = 2
 
-def preprocess_spectrum(dummy,mz,intensity):
-    global MZ_MAX, SPECTRUM_RESOLUTION
-    #ID,mz,intensity = x
-
-    def _parse_indices(element):
-        resolution = SPECTRUM_RESOLUTION
-        element = np.around(element,resolution)
-        element = (element * (10**resolution))
-        return [element]
-
-    def _rescale_spectrum(indices,values):
-        # get unique indices, and positions in the array
-        y,idx = np.unique(indices,return_index=True)
-
-        # Use the positions of the unique values as the segment ids to sum segments up:
-        values = np.add.reduceat(np.append(values,0), idx)
-
-        ## Truncate
-        mask = np.less(y,MZ_MAX * (10**SPECTRUM_RESOLUTION))
-        indices = y[mask]
-        values = values[mask]
-
-        #make nested list [1, 2, 3] -> [[1],[2],[3]], as later requiered by SparseTensor:
-        #indices = tf.reshape(indices, [tf.size(indices),1])
-
-        return indices,values
-
-    def _to_sparse(indices,values):
-        from scipy.sparse import csr_matrix
-        zeros = np.zeros(len(indices),dtype=np.int32)
-        intensities_array = csr_matrix((values,(indices,zeros)),shape=(MZ_MAX * (10**SPECTRUM_RESOLUTION),1), dtype=np.float32).toarray().flatten()
-        return intensities_array
-
-    #### PREPROCESSING BEGIN #######
-    # round indices according to spectrum resolution, SPECTRUM_RESOLUTION:
-    mz = list(map(_parse_indices,mz))
-                        # aggregate intensities accordingly to the new indices:
-    mz,intensity = _rescale_spectrum(mz,intensity)
-
-    # mz,intensity -> dense matrix of fixed m/z-range populated with intensities:
-    spectrum_dense = _to_sparse(mz,intensity)
-    # normalize by maximum intensity
-    max_int = np.max(intensity)
-    spectrum_dense = np.log(spectrum_dense+1.) - np.log(max_int)
-    spectrum_dense = spectrum_dense.astype(np.float32)
-    #print(spectrum)
-    #### PREPROCESSING END #########
-    return dummy,spectrum_dense
 
 df = pd.read_hdf('./files/merged.hdf5','df')#,dtype= {'mz': str, 'intensities': str})
 dataset_size = len(df)
@@ -86,8 +39,12 @@ intensities = intensities.to_tensor()
 ds = data.Dataset.from_tensor_slices((seq,mz,intensities))
 ds = data.Dataset.shuffle(ds,buffer_size = 10*BATCH_SIZE)
 ds = ds.repeat()
+
+print(data.get_output_shapes(ds))
+#ds = ds.map(lambda dummy, mz, intensities: tuple(tf.numpy_function(preprocess_spectrum, [dummy,mz,intensities], [dummy.dtype,tf.float32])),num_parallel_calls=AUTOTUNE)
+ds = ds.map(lambda dummy, mz, intensities: tuple(tf_preprocess_spectrum(dummy,mz,intensities)),num_parallel_calls=AUTOTUNE)
 ds = ds.batch(BATCH_SIZE)
-ds = ds.map(lambda dummy, mz, intensities: tuple(tf.numpy_function(preprocess_spectrum, [dummy,mz,intensities], [dummy.dtype,tf.float32])),num_parallel_calls=AUTOTUNE)
+print(data.get_output_shapes(ds))
 ds = ds.prefetch(buffer_size=AUTOTUNE)
 
 def timeit(ds, steps_per_epoch=steps_per_epoch):
