@@ -65,7 +65,7 @@ def tf_preprocess_spectrum(dummy,mz,intensity):
     mz = mz*10**SPECTRUM_RESOLUTION
     
     # TODO: check this:
-    indices = tf.math.ceil(mz)
+    indices = tf.math.floor(mz)
     indices = tf.cast(indices,tf.int64)
 
 
