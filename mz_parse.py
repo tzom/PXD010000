@@ -77,7 +77,7 @@ def tf_preprocess_spectrum(dummy,mz,intensity):
     # eliminate zeros:
     notzero_mask = tf.math.greater(uniq_indices,tf.zeros_like(uniq_indices))    
     # truncate :
-    trunc_mask = tf.math.less(uniq_indices,tf.zeros_like(uniq_indices)+n_spectrum)
+    trunc_mask = tf.math.less_equal(uniq_indices,tf.zeros_like(uniq_indices)+n_spectrum)
     # put into joint mask:
     mask = tf.logical_and(notzero_mask,trunc_mask)
     # apply mask:
@@ -108,7 +108,7 @@ def tf_maxpool(dense):
 if __name__ == "__main__":
     n_peaks = 400
 
-    mz = np.sort(np.random.uniform(100,1900,size=n_peaks))
+    mz = np.sort(np.random.uniform(0,2000,size=n_peaks))
     #intensity = np.random.standard_exponential(size=n_peaks)
     intensity = np.random.gamma(1.0,size=n_peaks)
     print(intensity)
