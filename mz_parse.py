@@ -94,6 +94,11 @@ def tf_preprocess_spectrum(dummy,mz,intensity):
     #dense = tf.expand_dims(dense,axis=0)
     return dummy,dense
 
+def normalize(intensities):
+    max_int = tf.reduce_max(intensities)
+    normalized = tf.log(intensities+1.)-tf.log(max_int+1)
+    return normalized
+
 def tf_maxpool(dense):
     shape = dense.shape
     dense = tf.reshape(dense,[1,-1,1,1])
@@ -104,6 +109,18 @@ def tf_maxpool(dense):
     i0 = tf.reshape(i0,[1,int(n_spectrum/k),1,1]) 
     i = i-i0
     return x,i
+
+def tf_maxpool_with_argmax(dense,k=100):
+    dense = tf.reshape(dense,[-1,k])
+    x = tf.reduce_max(dense,axis=-1)
+    i = tf.arg_max(dense,dimension=-1)
+    return x,i
+
+def parse(dummy,mz,intensity):
+    dummy, dense = tf_preprocess_spectrum(dummy,mz, intensity)
+    x,i = tf_maxpool_with_argmax(dense)
+    x = normalize(x)
+    return dummy, x, i 
 
 if __name__ == "__main__":
     n_peaks = 400
@@ -116,8 +133,10 @@ if __name__ == "__main__":
     _,dense = preprocess_spectrum(None,mz,intensity)
     print(dense.shape)
 
-    _,tf_dense = tf_preprocess_spectrum(None,mz, intensity)
-    x,i = tf_maxpool(tf_dense)
+    #_,tf_dense = tf_preprocess_spectrum(None,mz, intensity)
+    #x,i = tf_maxpool(tf_dense)
+
+    _,x,i = parse(None,mz,intensity)
   
     mz_p = tf.placeholder(tf.int64,[n_peaks])
     intensities_p = tf.placeholder(tf.float32,[n_peaks])
