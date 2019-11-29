@@ -1,3 +1,4 @@
+
 import requests, json
 from pandas.io.json import json_normalize
 import pandas as pd
@@ -5,11 +6,11 @@ import wget
 import os
 import gzip
 
-max_num_files = 10
+max_num_files = 30
 
-try:
+if os.path.exists('./files'):
     os.chdir('./files')
-except:
+else:
     os.mkdir('./files')
     os.chdir('./files')
 

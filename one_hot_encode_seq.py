@@ -4,7 +4,8 @@ max_len = 12 # maximum peptide length
 k = 5 # k-mer length
 
 pad = '_'
-alphabet = ['V', 'H', 'L', 'A', 'N', 'P', 'Y', 'W', 'T', 'E', 'Q', 'G', 'M', 'S', 'R', 'D', 'C', 'I', 'K', 'F',pad]
+#alphabet = ['V', 'H', 'L', 'A', 'N', 'P', 'Y', 'W', 'T', 'E', 'Q', 'G', 'M', 'S', 'R', 'D', 'C', 'I', 'K', 'F',pad]
+alphabet = [pad,'V', 'H', 'L', 'A', 'N', 'P', 'Y', 'W', 'T', 'E', 'Q', 'G', 'M', 'S', 'R', 'D', 'C', 'I', 'K', 'F']
 
 ### MODIFICATIONS #############################################
 mod_aa_alphabet = ['O']
@@ -25,7 +26,7 @@ def one_hot(a, num_classes=len(aa_alphabet)):
     return np.squeeze(np.eye(num_classes)[a.reshape(-1)])
 
 def rev_one_hot(one_hot_vec):
-    return np.argmax(one_hot_encoded, axis=-1)
+    return np.argmax(one_hot_vec, axis=-1)
 
 def to_aa(indices,index_to_aa=index_to_aa):
     return np.array(list(map(lambda c: index_to_aa[c], list(indices))))
@@ -72,6 +73,8 @@ def do_all_the_shit(seq,max_len=max_len,k=k):
   array with shape: (n-k+1,k,alphabet_size)
   '''
   padded = padding(seq,max_len=max_len) # add padding
+  if k is None:
+    k = len(padded)
   kmer = kmers(padded,k) # create list of kmers
   kmer_indices= list(map(lambda char: to_index(char),kmer)) # transform list of kmers to indices
   kmer_one_hot = list(map(lambda index: one_hot(index),kmer_indices)) # one-hot encode
