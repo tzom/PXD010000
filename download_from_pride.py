@@ -6,7 +6,7 @@ import wget
 import os
 import gzip
 
-max_num_files = 30
+max_num_files = 2
 
 if os.path.exists('./files'):
     os.chdir('./files')

@@ -5,14 +5,22 @@ import pandas as pd
 import tensorflow as tf
 import numpy as np
 import time
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from one_hot_encode_seq import do_all_the_shit, rev_one_hot, to_aa, index_to_aa
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-MZ_MAX=2000
-SPECTRUM_RESOLUTION=2
+
 max_len=24
+
+MZ_MAX=1900
+SPECTRUM_RESOLUTION=2
+k = 50
+
+def set_k(new_k):
+    global k
+    k = new_k
+    return k
 
 def tf_preprocess_spectrum(dummy,mz,intensity):
     #global MZ_MAX, SPECTRUM_RESOLUTION
@@ -27,39 +35,40 @@ def tf_preprocess_spectrum(dummy,mz,intensity):
 
     uniq_indices, i = tf.unique(indices)
     # TODO: check what exactly to use here, sum, max, mean, ...
-    uniq_values = tf.math.segment_sum(intensity,i)
+    uniq_values = tf.math.segment_max(intensity,i)
 
-    # create as mask to truncate between 0<mz<max
+    # create as mask to truncate between min<mz<max
     # eliminate zeros:
-    notzero_mask = tf.math.greater(uniq_indices,tf.zeros_like(uniq_indices))    
+    lower_bound = 100 * 10**SPECTRUM_RESOLUTION
+    notzero_mask = tf.math.greater(uniq_indices,tf.zeros_like(uniq_indices)+lower_bound)    
     # truncate :
-    #trunc_mask = tf.math.less_equal(uniq_indices,tf.zeros_like(uniq_indices)+n_spectrum)
     trunc_mask = tf.math.less(uniq_indices,tf.zeros_like(uniq_indices)+n_spectrum)
     # put into joint mask:
     mask = tf.logical_and(notzero_mask,trunc_mask)
     # apply mask:
     uniq_indices = tf.boolean_mask(uniq_indices,mask)
+    uniq_indices = uniq_indices - lower_bound
     uniq_values = tf.boolean_mask(uniq_values,mask)
     
 
     #### workaroud, cause tf.SparseTensor only works with tuple indices, so with stack zeros
     zeros = tf.zeros_like(uniq_indices)
     uniq_indices_tuples = tf.stack([uniq_indices, zeros],axis = 1)
-    sparse = tf.SparseTensor(indices = uniq_indices_tuples, values = uniq_values,dense_shape = [n_spectrum,1])
+    sparse = tf.SparseTensor(indices = uniq_indices_tuples, values = uniq_values,dense_shape = [n_spectrum-lower_bound,1])
     dense = tf.sparse.to_dense(sparse)
 
     #dense = tf.expand_dims(dense,axis=0)
     return dummy,dense
 
-def normalize(intensities):
-    max_int = tf.reduce_max(intensities)
-    normalized = tf.log(intensities+1.)-tf.log(max_int+1)
-    return normalized
+# def normalize(intensities):
+#     max_int = tf.reduce_max(intensities)
+#     normalized = tf.log(intensities+1.)-tf.log(max_int+1)
+#     return normalized
 
 def tf_maxpool(dense):
     shape = dense.shape
     dense = tf.reshape(dense,[1,-1,1,1])
-    k = 100
+    #k = 100
     n_spectrum = int(shape[0])
     x, i = tf.nn.max_pool_with_argmax(dense,[1,k,1,1],[1,k,1,1],padding='SAME')
     i0 = tf.constant(np.arange(0,n_spectrum,k))
@@ -67,18 +76,30 @@ def tf_maxpool(dense):
     i = i-i0
     return x,i
 
-def tf_maxpool_with_argmax(dense,k=100):
+def tf_maxpool_with_argmax(dense,k):
     dense = tf.reshape(dense,[-1,k])
     x = tf.reduce_max(dense,axis=-1)
-    i = tf.arg_max(dense,dimension=-1)
+    i = tf.math.argmax(dense,axis=-1)
     return x,i
 
+def ion_current_normalize(intensities):
+    total_sum = tf.reduce_sum(intensities**2)
+    normalized = intensities/total_sum
+    return normalized
+
 def parse(dummy,mz,intensity):
+    #global_mean, global_var= 15.,3.
+    #intensity = standardize(intensity,global_mean, global_var)
+    intensity = ion_current_normalize(intensity)
+    
     dummy, dense = tf_preprocess_spectrum(dummy,mz, intensity)
-    x,i = tf_maxpool_with_argmax(dense)
-    x = normalize(x)
+    
+    x,i = tf_maxpool_with_argmax(dense,k=k)
     x = tf.cast(x,tf.float32)
     i = tf.cast(i,tf.float32)
+    #x = normalize(x)
+    #i = tf.math.log(i+1.)-tf.math.log(tf.cast(k,tf.float32)+1.) # turn into logits
+    i = i/tf.cast(k,tf.float32)
     output = tf.stack([x,i],axis=1)
     return output, dummy 
 
@@ -122,13 +143,15 @@ def get_dataset(generator,batch_size=16,training=True):
     return ds
 
 if __name__ == "__main__":   
-    generator = fire_up_generator("./files/merged.hdf5")
-    it = get_dataset(generator,batch_size=16).make_one_shot_iterator()
-    next_ = it.get_next()
-    sess = tf.Session()
-    for i in range(100):
-      x,s = sess.run(next_)
-      print(x.shape)
 
+    # peaks-list:
+    seq,mz,i=next(iter(fire_up_generator("./files/merged.hdf5")()))
+    print(len(seq),len(mz),len(i))
+    print(seq,mz,i)
 
-#%%
+    # two_vector representation
+    x=next(iter(get_dataset(fire_up_generator("./files/merged.hdf5"))))
+    print(x)
+    # print(x[0][0])
+    
+

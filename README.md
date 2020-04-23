@@ -1,9 +1,32 @@
 # PXD010000
 
-0. TODO: wget from PRIDE 
-1. get features from mzid and mzml files.
-2. dump them in a dataframe and save as .hd5
---- 
-3. load .hd5 and feed into tf.data
-4. create mini-batches and benchmark
+## Dependencies:
+    wget, numpy, pandas, pyteomics, tensorflow>2.0
+
+
+## step 1: download 
+
+Download mzid and mzml files with wget from PRIDE:
+
+'''
+python download_from_pride.py
+'''
+
+## step 2: assign search results
+
+
+Dumps all (peptide-spectrum)-pairs in a hdf-file:
+
+'''
+python merge_mzid_mzml.py 
+'''
+
+## step 3: Fire up a tensorflow.dataset
+
+Performs loading,preprocessing,shuffle and batch-creation in a tensorflow.dataset
+
+'''
+python hdf_ds.py
+'''
+
 
