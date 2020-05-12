@@ -22,7 +22,10 @@ def set_k(new_k):
     k = new_k
     return k
 
-def tf_preprocess_spectrum(dummy,mz,intensity):
+def tf_preprocess_spectrum(mz,intensity):
+    '''
+    converts a peaks list (mz,intensity) into a dense spectrum.
+    '''
     #global MZ_MAX, SPECTRUM_RESOLUTION
    
     n_spectrum = MZ_MAX * 10**SPECTRUM_RESOLUTION
@@ -54,11 +57,10 @@ def tf_preprocess_spectrum(dummy,mz,intensity):
     #### workaroud, cause tf.SparseTensor only works with tuple indices, so with stack zeros
     zeros = tf.zeros_like(uniq_indices)
     uniq_indices_tuples = tf.stack([uniq_indices, zeros],axis = 1)
-    sparse = tf.SparseTensor(indices = uniq_indices_tuples, values = uniq_values,dense_shape = [n_spectrum-lower_bound,1])
-    dense = tf.sparse.to_dense(sparse)
+    sparse_spectrum = tf.SparseTensor(indices = uniq_indices_tuples, values = uniq_values,dense_shape = [n_spectrum-lower_bound,1])
+    dense_spectrum = tf.sparse.to_dense(sparse_spectrum)
 
-    #dense = tf.expand_dims(dense,axis=0)
-    return dummy,dense
+    return dense_spectrum
 
 # def normalize(intensities):
 #     max_int = tf.reduce_max(intensities)
@@ -87,21 +89,20 @@ def ion_current_normalize(intensities):
     normalized = intensities/total_sum
     return normalized
 
-def parse(dummy,mz,intensity):
-    #global_mean, global_var= 15.,3.
-    #intensity = standardize(intensity,global_mean, global_var)
+def parse(mz,intensity):
+    '''
+    converts a peaks list (mz,intensity) into a two-vector spectrum
+    '''
     intensity = ion_current_normalize(intensity)
     
-    dummy, dense = tf_preprocess_spectrum(dummy,mz, intensity)
+    spectrum_dense = tf_preprocess_spectrum(mz, intensity)
     
-    x,i = tf_maxpool_with_argmax(dense,k=k)
+    x,i = tf_maxpool_with_argmax(spectrum_dense,k=k)
     x = tf.cast(x,tf.float32)
     i = tf.cast(i,tf.float32)
-    #x = normalize(x)
-    #i = tf.math.log(i+1.)-tf.math.log(tf.cast(k,tf.float32)+1.) # turn into logits
     i = i/tf.cast(k,tf.float32)
-    output = tf.stack([x,i],axis=1)
-    return output, dummy 
+    spectrum_two_vec = tf.stack([x,i],axis=1)
+    return  spectrum_two_vec
 
 def fire_up_generator(file_path="./ptm21.hdf5",n=1,preshuffle=True):
     with pd.HDFStore(file_path) as hdf:
@@ -128,15 +129,15 @@ def fire_up_generator(file_path="./ptm21.hdf5",n=1,preshuffle=True):
         mz,i = np.array(r_entry.iloc[index]['mz']), np.array(r_entry.iloc[index]['intensities'])
         index+=1
 
-        yield seq,mz,i 
+        yield mz,i,seq
     return generator
 
 def get_dataset(generator,batch_size=16,training=True):
-    ds = tf.data.Dataset.from_generator(generator,output_types=(tf.float32,tf.float32,tf.float32),output_shapes=((None,max_len,22),None,None))
+    ds = tf.data.Dataset.from_generator(generator,output_types=(tf.float32,tf.float32,tf.float32),output_shapes=(None,None,(None,max_len,22)))
     if training:
         ds = ds.shuffle(500000)
     ds = ds.repeat(batch_size)
-    ds = ds.map(lambda seq,mz,intensities: tuple(parse(seq,mz,intensities)),num_parallel_calls=AUTOTUNE)
+    ds = ds.map(lambda mz,intensities,seq: (parse(mz,intensities),seq),num_parallel_calls=AUTOTUNE)
     ds = ds.batch(batch_size)
     ds = ds.repeat()
     ds = ds.prefetch(buffer_size=AUTOTUNE)
@@ -150,8 +151,9 @@ if __name__ == "__main__":
     print(seq,mz,i)
 
     # two_vector representation
-    x=next(iter(get_dataset(fire_up_generator("./files/merged.hdf5"))))
-    print(x)
+    spectra,seqs=next(iter(get_dataset(fire_up_generator("./files/merged.hdf5"))))
+    print(spectra)
+    print(seqs)
     # print(x[0][0])
     
 
